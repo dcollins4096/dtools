@@ -32,7 +32,8 @@ from collections import defaultdict
 
 import scipy
 
+#for right handed coordinates
 x_dict = [1,0,0]
 y_dict = [2,2,1]
-plot_dir = "%s/PigPen"%os.environ['HOME']
+plot_dir = "%s/plots"%os.environ['HOME']
 
