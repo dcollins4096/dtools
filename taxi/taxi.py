@@ -9,13 +9,9 @@ array=np.array
 #import h5py
 import types, time,weakref,davetools
 #import dave_callbacks
-from davetools import dsave, no_trailing_comments, ensure_list
-import turb_quan
-reload(turb_quan)
+from dtools.davetools import   ensure_list
+import dtools.davetools as dt
 
-#import QU_callback
-#reload(QU_callback)
-#import p49_fields
 def load(filename):
     try:
         filename.index('/')
@@ -43,224 +39,6 @@ def load(filename):
         this_taxi=None
     return this_taxi
 
-        
-
-class fleet():
-    def __init__(self,taxi_list=[]):
-        self.taxi_list = []
-        self.next_taxi_index=0
-        for car in taxi_list:
-            if type(car) is str:
-                self.taxi_list.append(load(car))
-            else:
-                self.taxi_list.append(car)
-        self.namelength = max([len(t.name) for t in self.taxi_list])
-        self.nt = "%"+str(self.namelength+1)+"s "
-
-    def next(self):
-        this_taxi_index = self.next_taxi_index
-        self.next_taxi_index += 1
-        if self.next_taxi_index >= len(self.taxi_list) + 1:raise StopIteration
-        return self.taxi_list[this_taxi_index]
-    def __iter__(self):
-        self.next_taxi_index=0
-        return self
-    def __getitem__(self,item):
-        out = []
-        if type(item) is int: #isinstance(item,types.IntType):
-            out = self.taxi_list[item]
-        else:
-            for car in self.taxi_list:
-                print(self.nt%car.name, car.__dict__[item])
-                out.append(car.__dict__[item])
-        return out
-    def __setitem__(self,item,value ):
-        for car in self.taxi_list:
-            car.__dict__[item] = value
-            
-    def __call__(self,string, frames=None):
-        """Execute arbitrary code on the cars in the taxi fleet.
-        output can be used to return values."""
-        output = []
-        for car in self.taxi_list:
-            if frames is None:
-                exec(string)
-            else:
-                for frame in frames:
-                    car.load(frame)
-                    exec(string)
-        return output
-    def output(self,command, frames=None):
-        """Call *command* on all cars, return the output as a list."""
-        output = []
-        for car in self.taxi_list:
-            if frames is None:
-                output.append(eval(command))
-            else:
-                for frame in frames:
-                    car.load(frame)
-                    output.append(eval(command))
-        return output
-    def outname(self,prefix):
-
-        """sets car.outname = prefix+car.name"""
-        for car in self.taxi_list:
-            car.outname = prefix + car.name
-    def plot(self,*args, **kwargs):
-        #check for fixed colorbars.
-        prior_zlim=None
-        if 'prefix' in kwargs:
-            self.outname(kwargs.pop('prefix'))
-
-        for car in self.taxi_list:
-            if car.Colorbar is 'fixed' and prior_zlim is not None and car.zlim is not None:
-                car.zlim = prior_zlim
-            car.plot(*args, **kwargs)
-            prior_zlim = car.zlim
-    def save(self,suffix=""):
-        for car in self.taxi_list:
-            thisname = car.name+suffix
-            car.save(thisname)
-    def allnames(self):
-        ncar=len(self.taxi_list)
-        return "%s_"*ncar%tuple([car.name for car in self.taxi_list])
-    def dumb_profile(self,fields,**kwargs):
-        for car in self.taxi_list:
-            car.dumb_profile(fields,**kwargs)
-    def phase(self,*args,**kwargs):
-        for car in self.taxi_list:
-            car.phase(*args,**kwargs)
-        
-    def profile(self,*args,**kwargs):
-        """Runs profile on all using *args and **kwargs.
-        Also plots the combined set"""
-        for car in self.taxi_list:
-            car.profile(*args,**kwargs)
-        plt.clf()
-        color_by = kwargs.pop('color_by','sim') #either color with sim or frame. The other gets line style
-        ntotal = max([len(car.frames) for car in self.taxi_list])
-        simtotal = len(self.taxi_list)
-        if color_by=='frame':
-            rm = davetools.rainbow_map(ntotal)
-        elif color_by=='sim':
-            rm = davetools.rainbow_map(simtotal)
-        plt.clf()
-        linelist = {0:'-',1:'--',2:':'}
-        all_frames=[]
-        plot_args={'linewidth':0.3}  #I can probably make this the same as kwargs
-        prior_y = None
-        for n,car in enumerate(self.taxi_list):
-            all_xbins = car.profile_data['all_xbins']
-            all_profiles = car.profile_data['all_profiles']
-            for i,frame in enumerate(car.return_frames()):
-                thex= all_xbins[i]
-                they=all_profiles[i]
-                if 'units' in kwargs:
-                    units=kwargs['units']
-                    fractional=kwargs.get('fractional',True)
-                    if units[0] is not None:
-                        thex = thex.in_units(units[0])
-                    if units[1] is not None and fractional is not True:
-                        they = they.in_units(units[1])
-                plot_args['label']='%s %04d'%(car.name,frame)
-                if prior_y is not None:
-                    l1norm = np.mean(np.abs( they - prior_y ))/np.mean(they)
-                    print(l1norm)
-                    prior_y = they
-                    if l1norm > 1e-8:
-                        they *= 1.1
-                        plot_args['label'] += "+off"
-                else:
-                    prior_y = they
-    
-                if color_by=='sim':
-                    plot_args['c']=rm(n)
-                    plot_args['linestyle']=linelist.get(i,'-')
-                elif color_by=='frame':
-                    plot_args['c']=rm(i)
-                    plot_args['linestyle']=linelist.get(n,'-')
-                plt.plot( thex, they,**plot_args)
-                #plt.plot( all_xbins[i], all_profiles[i],c=rm(i),linestyle=linelist[n],label='%s %04d'%(car.name,frame))
-                if frame not in all_frames:
-                    all_frames.append(frame)
-        plt.xlabel(car.profile_data['fields'][0])
-        plt.ylabel(car.profile_data['fields'][1])
-        plt.xscale(car.profile_data['scales'][0]); plt.yscale(car.profile_data['scales'][1])
-        plt.legend(loc=0)
-        frame_name = "_%04d"*len(all_frames)%tuple(all_frames)
-        profname = '%s_prof_%s_%s_n%s.pdf'%(self.allnames(), car.profile_data['fields'][0], car.profile_data['fields'][1], frame_name)
-        print(profname)
-        plt.savefig(profname)
-
-    def stat(self,field,frame=None):
-        """print min and max of *field*"""
-        ds = self.load(frame)
-        minTuple = ds.find_min(field)
-        maxTuple = ds.find_max(field)
-        return {'min':minTuple,'max':maxTuple}
-
-
-    def mstat(self,fields=None,frames=None, format = "%9.2e",Norm=False):
-        """1 Min and max for all fields in self.fields.
-        Field list overridden by *fields*.
-        *Norm* subtracts off the volume-weighted mean."""
-        print(fields)
-        if frames is None:
-            frames = self.return_frames()
-        for frame in frames:
-            if fields is None:
-                fields = self.fields
-            self.load(frame)
-            out = self.region.quantities['Extrema'](fields)
-            if len(fields) == 1:
-                out = [out]
-            if Norm is True:
-                for n, field in enumerate(fields):
-                    avg = self.region.quantities['WeightedAverageQuantity'](field,'CellVolume')
-                    out[n] = out[n][0]-avg, out[n][1]-avg
-            if hasattr(Norm,'has_key'):
-                for n, field in enumerate(fields):
-                    avg =  0
-                    if Norm.has_key(field):
-                        avg = Norm[field]
-                        print(field,avg)
-                    out[n] = out[n][0]-avg, out[n][1]-avg
-            format_string = "%s %s %s"%(format,format,"%s")
-            for n, field in enumerate(fields):
-                print(format_string%(out[n][0], out[n][1], field))
-
-    def find_extrema(self,fields=None,frames=None, manual_positive=False):
-        all_fields = []
-        for car in self: #I feel like there's an easier way to do this.
-            for field in car.fields:
-                if field not in all_fields:
-                    all_fields.append(field)
-
-        extrema_store={}
-        for n,car in enumerate(self.taxi_list):
-            car.find_extrema(fields,frames, manual_positive=manual_positive)
-            for field in all_fields:
-                if car.extrema.has_key(field):
-                    if extrema_store.has_key(field):
-                        extrema_store[field][0] = min([extrema_store[field][0],car.extrema[field][0]])
-                        extrema_store[field][1] = max([extrema_store[field][1],car.extrema[field][1]])
-                    else:
-                        extrema_store[field]=np.zeros(2)
-                        extrema_store[field][0] = car.extrema[field][0]
-                        extrema_store[field][1] = car.extrema[field][1]
-        for car in self.taxi_list:
-            car.extrema = copy.copy(extrema_store)
-
-
-
-
-
-
-
-def lim_down(value):
-    return 10**(np.floor(np.log10(value)))
-def lim_up(value):
-    return 10**(np.ceil(np.log10(value)))
 
 class PortException(Exception):
     def __init__(self, value = ""):
@@ -273,13 +51,11 @@ class OperationException(Exception):
     def __str__(self):
         return repr(self.value)
 
-#GET def callbacks():
-    
-#GET def operations():
 class dummy_YTArray():
     """YTarrays need to have datasets associated.  This is a container that assumes you know what you're doing.
     Has a *value* and *units*, the latter stored as a string.
-    This is for easy caching of things to text."""
+    This is for easy caching of things to text.
+    This might need to be cleaned up, there are probably better ways to handle this."""
     def __init__(self,value=0,units=None):
         self.units = units
         if hasattr(value,'units'):
@@ -308,25 +84,11 @@ class dummy_YTArray():
                 verb = ds.arr
         except:
             pass
-#        if hasattr(self.value,'size') or isinstance(value,types.TupleType) or isinstance(value,types.ListType)
-#           if self.value.size > 1:
-#               verb = ds.arr
         return verb(self.v,self.units)
     def __str__(self):
         return str(self.value) + " " + str(self.units)
     def __repr__(self):
         return repr(self.value) + " " + repr(self.units)
-#       self.next_index=0
-#   def __getitem__(self,index):
-#       return self.value[index]
-#   def next(self):
-#       this_index = self.next_index
-#       self.next_index += 1
-#       if self.next_index >= len(self.value) + 1:raise StopIteration
-#       return self.value[this_index]
-#   def __iter__(self):
-#       self.next_index=0
-#       return self
 
 
 def writefunction(thing):
@@ -392,7 +154,8 @@ class taxi:
     Primarily use for repeatability and reduced startup for plotting simple things that I do
     all the time, with default values suitably chosen.  See the source code for the options
     and defaults.  The won't be repeated here because there are several, and that's asking
-    for a documentation inconsistency."""
+    for a documentation inconsistency.
+    """
     
     def smarten(self,value, units=None, frame=None):
         if self.ds is None or frame is not None:
@@ -424,12 +187,12 @@ class taxi:
         self.OutputLog = "OutputLog"
         self.plot_origin = 'domain'  #see yt docs.
         self.axis = 0                #Axis for the plot
-        self.frames = []             #Dump numbers to be plotted.
+        self.frames = 'all'             #Dump numbers to be plotted.
         self.fields = 'Density'      #Field (hopefully to be list) for the plot
         self.weight_field = None           #Weight field.  Projections?    
         self.name   = 'sim'          #identifier for this taxi instance
         self.outname = 'Image'       #Prefix for output
-        self.outdir = "./"
+        self.outdir = plot_dir
         self.directory = '.'         #Directory where the simulation was run. (Where the DD* dirs are)
         self.ProfileDir= "./ProfileFiles/"
         self.ProfileName = None
@@ -493,6 +256,7 @@ class taxi:
         #self.ExcludeFromWrite.append('callbacks')
         self.WriteSpecial['callbacks'] = self.write_callbacks
 
+        self.dt = None
         self.MaxLevel=-1                   #max analysis level, currently does nothing
         
         #for strings on the image
@@ -619,8 +383,6 @@ class taxi:
                 out += "self."+i + " = " + writefunction(self.__dict__[i]) + "\n"
         return out
 
-    # checkrel def frame_grabber(self,tinitial=None,tfinal=None,dt=None,preset=None):
-
     #
     #
     # filenames are a mild hassle.
@@ -639,10 +401,7 @@ class taxi:
 
 
     def return_filename(self,frame=None):
-        verb_save=self.verbose
-        self.verbose=False
         self.set_filename(frame)
-        self.berbose=verb_save
         return self.basename
 
     def set_filename_preset_syntax(self,frame=None):
@@ -736,7 +495,23 @@ class taxi:
                     self.frame_dict[ nframe ]['time']   = float(linesplit[4])
                 except:
                     self.frame_dict[ nframe ]['time']   = -1
-                #pdb.set_trace()
+            self.frame_list = nar(sorted(self.frame_dict.keys()))
+            self.times = nar([self.frame_dict[nframe]['time'] for nframe in self.frame_list])
+    def get_movie_frames(self,dt=None,thresh=1e-7):
+        self.get_frames()
+        if dt==None:
+            first_frame = min(self.frame_list)
+            self.load(first_frame)
+            dt = self.ds['dtDataDump']
+        mask = (self.times % dt)/dt < thresh
+        return mask
+    def get_tff(self):
+        self.load()
+        self.G = self.ds['GravitationalConstant']/(4*np.pi)
+        self.tff = np.sqrt(3*np.pi/(32*G*1))
+        return self.tff
+
+
     def set_filename_from_outputlog(self,frame=None):
         self.get_frames()
         if frame == None:
@@ -745,9 +520,6 @@ class taxi:
         if self.verbose == True:
             print("==== %s ===="%(self.basename))
 
-    #def fill(self, frame=None):
-    #    print "FILL IS DEPRECATED"
-    #    self.load(frame)
     def load(self, frame = None):
         """populate parameter file, plot collection, hierarchy, region if desired.
         Possibly could be renamed 'load' """
@@ -764,21 +536,12 @@ class taxi:
                 self.ds.add_field(field,**self.derived_fields[field])
             else:
                 field_stuff(self.ds)
-
-
         for key in self.dummy_YTArray_list:
             dya = self.__dict__[key] 
             #if it's a dummy array, or even it it's suggest that it should be,
             #make it a smarter YTArray.
             self.__dict__[key] = dummy_YTArray(dya).smarten(self.ds)
-#           if dya.v.size == 1:
-#               verb = self.ds.quan
-#           else:
-#               verb = self.ds.arr
-#           self.__dict__[key] = verb(dya.v, dya.units)
         self.dummy_YTArray_list = [] #only need to do this once.
-        #na_errors= np.seterr(all='ignore')
-        #np.seterr(**na_errors)
         return self.ds
 
     def get_region(self, frame=None):
@@ -805,10 +568,8 @@ class taxi:
         #self.reg  = weakref.proxy(reg)
         return reg
 
-
-
-
     def arg_setter(self,kwargs):
+        """For updating arguments by way of the function call."""
         for arg in kwargs.keys():
             if arg.startswith("_"):
                 continue
@@ -828,6 +589,7 @@ class taxi:
                 raise
             return self.frames
         all_frames=self.get_all_frames()
+        #pdb.set_trace()
         return_frames = 'type error'
         if type(self.frames) is str: #isinstance(self.frames,types.StringType):
             if self.frames=='all':
@@ -842,6 +604,10 @@ class taxi:
                 return_frames = all_frames[-1:]
             elif self.frames == 'all_reverse':
                 return_frames = all_frames[::-1]
+            elif self.frames == 'movie_frames':
+                mask = self.get_movie_frames(self.dt)
+                #pdb.set_trace()
+                return_frames = list(self.frame_list[mask])
         elif type(self.frames) is slice: # isinstance(self.frames, types.SliceType):
             return_frames = all_frames[self.frames]
         else:
@@ -849,49 +615,8 @@ class taxi:
 
         return return_frames
 
-    def skip_this_plot(self,check_frame_i, check_field, check_axis_i, check_operation, store_plot=True):
-        check_frame = str(check_frame_i)
-        check_axis  = str(check_axis_i)
-        logname = self.outname.split('/')[-1]
-        fptr = open("plot_log_%s.txt"%logname,"a+")
-        try:
-            plotted_dict = self.plotted_dict
-        except:
-            plotted_dict = {}
-        plot_exists = False
-        for line in fptr:
-            frame, field, axis, operation = line[:-1].split(" ")
-            plotted_dict[frame] = plotted_dict.get(frame,{})
-            plotted_dict[frame][field] = plotted_dict[frame].get(field,{})
-            plotted_dict[frame][field][axis] = plotted_dict[frame][field].get(axis,{})
-            plotted_dict[frame][field][axis][operation] = plotted_dict[frame][field][axis].get(operation,{})
-        if check_frame in plotted_dict:
-            if check_field in plotted_dict[check_frame]:
-                if check_axis in plotted_dict[check_frame][check_field]:
-                    if check_operation in plotted_dict[check_frame][check_field][check_axis]:
-                        plot_exists = True
-                        
-        self.plotted_dict = plotted_dict
-        if not plot_exists:
-            print("NEW PLOT", check_frame, check_field, check_axis, check_operation, self.outname)
-            if store_plot:
-                fptr.write("%s %s %s %s\n"%(check_frame,check_field,check_axis,check_operation))
-        else:
-            print("PLOT EXISTS", check_frame, check_field, check_axis, check_operation, self.outname, "CLOBBER", self.clobber_plot)
-            
-        if not self.clobber_plot and plot_exists:
-            print("PLOT EXISTS, SKIPPING", check_frame, check_field, check_axis, check_operation, self.outname)
-            return True
-        return False
-               
-
-
     def plot(self,local_frames=None, **kwargs):
         self.arg_setter(kwargs)
-        if 'new_particles' in self.callbacks:
-            if len(self.axis) *len(self.fields) > 1:
-                print("WARNING: new__particles callbacks does not work with multiple axes or fields.")
-        print(self.zlim)
         """Makes the uber plot.  Options for plot can be found in the uber description,
         plot operations can be found by typing uber.operations()"""
         start_time = time.time()    
@@ -929,8 +654,6 @@ class taxi:
                 #start axing
                 for axis in ensure_list(self.axis):
                     #if multiple plots are used, do_plot will return a figure object.
-                    if self.skip_this_plot(frame, field, axis, self.operation):
-                        continue
                     plot_or_fig = self.do_plots(field,axis,FirstOne)
 
                     if field in self.set_log: #.has_key(field):
@@ -966,6 +689,11 @@ class taxi:
         if self.ds is None or frame is not None:
             self.load(frame)
         value,center = self.ds.find_max(field)
+        self.center = np.array(center)
+    def set_center_min(self,field='density', frame=None):
+        if self.ds is None or frame is not None:
+            self.load(frame)
+        value,center = self.ds.find_min(field)
         self.center = np.array(center)
     def do_plots(self,sub_field,axis,FirstOne):
 
@@ -1094,30 +822,6 @@ class taxi:
                     self.frame_dict[frame]['DirPrefix'],
                     self.frame_dict[frame]['SetNumber'])
 
-    def pdir_old(self,frame):
-        """Finds .products directores in self.directory.  
-        Makes the questionable assumption that directories are uniquely numbered."""
-        print("old style pdir needs to be checked.")
-        raise PortException("old style product directory")
-        if hasattr(self,'pdirdict'):
-            return self.pdirdict[frame]
-        else:
-            produs = glob.glob(self.directory+"/*.products")
-            first_to_check = "%s/%s%04d.products"%(self.directory,
-                                                   self.name_dir,
-                                                   frame)
-
-            if first_to_check in produs:
-                return first_to_check
-
-            self.pdirdict = {}
-            TheNumbers = re.compile(r'.*(\d\d\d\d).products')
-            for L in produs:
-                pdir = L.split("/")[-1]
-                match = TheNumbers.match(pdir)
-                if match is not None:
-                    self.pdirdict[ int(match.groups(1)[0])] = L
-            return self.pdirdict[frame]
 
     def make_cg(self,frame=None,field=None, num_ghost_zones=0):
         """Makes a covering grid for the root grid."""
@@ -1266,180 +970,7 @@ class taxi:
                     self.extrema[field][0] = min([this_extrema[0].v, self.extrema[field][0]])
                     self.extrema[field][1] = max([this_extrema[1].v, self.extrema[field][1]])
 
-    def dumb_profile(self,fields,**kwargs):
-        frame_template = self.outname + "_%04i"
-        for frame in self.return_frames():
-            reg = self.get_region(frame)
-            plot=yt.ProfilePlot(reg,fields[0],fields[1],**kwargs)
-            plot.save(frame_template%frame)
 
-    def profile(self,fields, callbacks=None, weight_field=None, accumulation=False, fractional=True, scales=['log','log'],n_bins=64,extrema=None, units=[None,None],override_bins=None, skip=False,do_plots=True):
-
-        """needs to be generalized with bins."""
-        frame_template = self.outname + "_%04i"
-        weight_name = ""
-        if weight_field is not None:
-            weight_name = "%s_"%weight_field
-            frame_template += "_%s"%weight_field
-        all_xbins = []
-        all_profiles = []
-        for frame in self.return_frames():
-            if skip:
-                filename = "%s/%s_%s_%s"%(self.ProfileDir,frame_template%(self.returnsetnumber(frame)),fields[0],fields[1])
-                if len(glob.glob(filename+"*")):
-                    print("File exists and skip=True, skipping %s"%filename)
-
-                    continue
-            plt.clf()
-            reg = self.get_region(frame)
-            local_extrema = None
-            prof = yt.create_profile(reg,fields[0],fields[1] ,weight_field=weight_field,accumulation=accumulation,
-                                    fractional=fractional, n_bins=n_bins, extrema=extrema,override_bins=override_bins)
-            self.last_prof=prof
-            the_x = 0.5*(prof.x_bins[1:]+prof.x_bins[0:-1])
-            the_y = prof[fields[1]]
-            if units[0] is not None:
-                the_x = the_x.in_units(units[0])
-            if units[1] is not None and fractional is not True:
-                the_y = the_y.in_units(units[1])
-            x_units=the_x.units
-            y_units=the_y.units
-            plt.plot(the_x,the_y,label="n%04d"%frame)
-            all_xbins.append(the_x)
-            all_profiles.append(the_y)
-            scaledict={True:'log',False:'linear','log':'log','linear':'linear'}
-            plt.xscale(scaledict[scales[0]]); plt.yscale(scaledict[scales[1]])
-            plt.xlabel(r'%s $%s$'%(fields[0],x_units)); plt.ylabel(r'%s $%s$'%(fields[1],y_units))
-            profname = '%s_prof_%s_%s_n%04d.pdf'%(self.outname, fields[0], fields[1], frame)
-            plt.legend(loc=0)
-            plt.savefig(profname)
-            print(profname)
-            if True:
-                if glob.glob(self.ProfileDir) == []:
-                    os.mkdir(self.ProfileDir)
-                    print("made directory", self.ProfileDir)
-                filename = "%s/%s_%s_%s"%(self.ProfileDir,frame_template%(self.returnsetnumber(frame)),fields[0],fields[1])
-                all_files = glob.glob(filename+"*")
-                filename += "_%d.h5"%(len(all_files))
-                fptr=h5py.File(filename,"w")
-                fptr.create_dataset(fields[0],prof.x_bins.shape,data=prof.x_bins)
-                fptr.create_dataset(fields[1],prof[fields[1]].shape,data=prof[fields[1]])
-                fptr.create_dataset('pf_name',data=self.name)
-                fptr.create_dataset('InitialTime',data=self.ds['InitialTime'])
-                fptr.create_dataset('InitialCycle',data=self.ds['InitialCycleNumber'])
-                fptr.close()
-                if self.verbose:
-                    print("wrote profile file ",filename)
-        if do_plots:
-            ntotal = len(self.return_frames())
-            rm = davetools.rainbow_map(ntotal)
-            plt.clf()
-            for i,n in enumerate(self.return_frames()):
-                plt.plot( all_xbins[i], all_profiles[i],c=rm(i),label="n%04d"%n)
-            scaledict={True:'log',False:'linear','log':'log','linear':'linear'}
-            plt.xscale(scaledict[scales[0]]); plt.yscale(scaledict[scales[1]])
-            plt.xlabel(r'%s $%s$'%(fields[0],x_units)); plt.ylabel(r'%s $%s$'%(fields[1],y_units))
-            plt.legend(loc=0)
-            allframes = "_%04d"*ntotal%tuple(self.return_frames())
-            profname = '%s_prof_%s_%s_%sn%s.pdf'%(self.outname, fields[0], fields[1],weight_name, allframes)
-            print(profname)
-            plt.savefig(profname)
-            self.profile_data={'all_xbins':all_xbins,'all_profiles':all_profiles, 'scales':scales, 'fields':fields}
-
-    def qb_load(self,h5_name=None,plot_format='png'):
-        reload(turb_quan)
-        self.qb=turb_quan.quan_box(self)
-        self.qb.load(h5_name=h5_name)
-        self.qb.plot_format = plot_format
-    def phase(self,fields, callbacks=None, weight_field=None, phase_args={},save=True, n_bins=[64,64], phase_callbacks=[]):
-        """Uber wrapper for phase objects.
-        for all frames in self.frame, run a phase plot object on the region.
-        Run all callbacks on the plot.
-        *save* pickles the region in PhaseFiles"""
-        if len(fields) != 3:
-            print("wrong number of fields: needs 3.", fields)
-            return
-        frame_template = self.outname + "_%04i"
-        phase_list = []
-        for frame in ensure_list(self.return_frames()):
-            reg = self.get_region(frame)
-            local_extrema = None
-            if self.Colorbar in ['fixed', 'monotonic']:
-                if fields[0] in self.extrema and fields[1] in self.extrema:
-                    local_extrema = {fields[0]:self.extrema[fields[0]], fields[1]:self.extrema[fields[1]]}
-                else:
-                    local_extrema = None
-
-            print("LOCAL", local_extrema)
-            phase_args['bin_fields']=[fields[0],fields[1]]
-            phase_args['fields']=[fields[2]]
-            phase_args['weight_field']=weight_field
-            phase_args['extrema']=local_extrema
-            phase_args['n_bins']=n_bins
-
-            phase = yt.create_profile(reg,**phase_args)
-            #self.phase = weakref.proxy(phase)
-            pp = yt.PhasePlot.from_profile(phase)
-            pp.set_xlabel(fields[0])
-            pp.set_ylabel(fields[1])
-            self.last_phase_plot=pp
-
-            #print(pp.save('derp3.png'))
-            outname = "%s_%04d"%(self.outname,frame)
-
-            if self.Colorbar in ['fixed','monotonic']:
-                xmin=phase.x_bins[0]
-                xmax=phase.x_bins[-1]
-                ymin=phase.y_bins[0]
-                ymax=phase.y_bins[-1]
-                if fields[0] in self.extrema and self.Colorbar == 'monotonic':
-                    xmin=min([self.extrema[fields[0]][0], phase.x_bins[0]])
-                    xmax=max([self.extrema[fields[0]][1], phase.x_bins[-1]])
-                if fields[1] in self.extrema and self.Colorbar == 'monotonic':
-                    ymin=min([self.extrema[fields[1]][0], phase.y_bins[0]])
-                    ymax=max([self.extrema[fields[1]][1], phase.y_bins[-1]])
-                if self.Colorbar in ['fixed', 'monotonic']:
-                    if fields[0] not in self.extrema:
-                        self.extrema[fields[0]] = [xmin,xmax]
-                    if fields[1] not in self.extrema:
-                        self.extrema[fields[1]] = [ymin,ymax]
-                print("extrema, post", self.extrema)
-                pp.set_xlim( lim_down(self.extrema[fields[0]][0]), lim_up(self.extrema[fields[0]][1]))
-                pp.set_ylim( lim_down(self.extrema[fields[1]][0]), lim_up(self.extrema[fields[1]][1]))
-
-            for callback in phase_callbacks:
-                callback(pp)
-                #key = pp.plots.keys()[0]
-                #this_axes = pp.plots[key].axes
-                #pp.save('horm.png')
-                ##this_axes.plot([1e7,1e10],[1e7,1e10])
-                #this_axes.plot([1e-25,1e-23],[1e-25,1e-23])
-                #pp.save('derp.png')
-
-            phase_list.append(phase)
-            print(pp.save(outname))
-            #
-            # some old hdf5 and callback code. Harvest later.
-            #
-            if 0:
-                filename += "_%d.h5"%(len(all_files))
-                print("Writing H5 file",filename)
-                fptr = h5py.File(filename,"w")
-                the_dict = self.pc.plots[0].data.field_data
-                for fld in the_dict.keys():
-                    this_field = the_dict[fld]
-                    fptr.create_dataset(fld,this_field.shape, data=this_field)
-                fptr.create_dataset('x_bin_field',data=self.pc.plots[0].data.x_bin_field)
-                fptr.create_dataset('y_bin_field',data=self.pc.plots[0].data.y_bin_field)
-                fptr.create_dataset('ds_name',data=self.basename.split("/")[-1])
-                fptr.create_dataset('InitialTime',data=self.ds['InitialTime'])
-                fptr.create_dataset('InitialCycle',data=self.ds['InitialCycleNumber'])
-                fptr.close()
-            if 0:
-                for call in ensure_list(callbacks):
-                    phase.add_callback(call)
-
-        return phase_list
     def count_particles(self, frame=None, ptype='all'):
         """Turns out Metadata.NumberOfParticles isn't always updated close to the output in Enzo."""
         """Also, if ds is loaded already, just leave frame as None and it won't reload"""
@@ -1451,19 +982,6 @@ class taxi:
             pass
         return nparticles
 
-    def get_new_indices(self):
-        reg=self.get_region()
-        try:
-            these_indices = reg['particle_index']
-        except:
-            these_indices = self.ds.arr([],'dimensionless')
-        if self.last_particle_indices is not None and self.last_particle_index_step is not self.ds['InitialCycleNumber']:
-            to_plot = np.setdiff1d(these_indices,self.last_particle_indices)
-        else:
-            to_plot=these_indices
-        self.last_particle_indices=these_indices
-        self.last_particle_index_step = self.ds['InitialCycleNumber']
-        return to_plot
     def add_callbacks(self,the_plot,axis=None):
         for i,callback in enumerate(self.callbacks):
             args = self.callback_args.get(callback,{'args':[],'kwargs':{}})
