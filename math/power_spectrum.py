@@ -1,4 +1,4 @@
-from starter2 import *
+from dtools.starter1 import *
 import scipy.stats
 
 class powerspectrum():
@@ -23,6 +23,11 @@ class powerspectrum():
         self.k = k
         self.power=power.real
         self.kcen=bc
+        if rank == 2:
+            volume = 2*np.pi*self.kcen
+        if rank == 3:
+            volume = 4*np.pi*self.kcen**2
+        self.avgpower = self.power/volume
 
 #import fourier_tools_py3.fourier_filter as Filter
 #class powerspectrum_old():
