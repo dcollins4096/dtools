@@ -1,5 +1,5 @@
 
-from starter2 import *
+from dtools.starter1 import *
 import yt
 from dtools.math import volavg
 import dtools.davetools as dt
@@ -51,6 +51,55 @@ def get_cubes(sim,frame,do_rho_4=False):
         output = rho_full, rho, rho_4
 
     return output
+
+def fake_powerlaw(N,alphaT,kmin,kmax,Amplitude=1,phase=False, rando=False):
+    kI = np.fft.fftfreq(N)
+    kx,ky,kz=np.meshgrid(kI,kI,kI)
+    rrr = np.sqrt(kx**2+ky**2+kz**2)
+    Ahat = np.zeros_like(rrr*1j)
+    k = np.unique(np.abs(kx))
+
+    rmin = k[kmin]
+    rmax = k[kmax]
+
+    ok = (rrr>rmin)*(rrr<=rmax)
+    ok_r=ok
+
+    #alphaT is total power. 2 makes a flat power
+    alphaV=alphaT-2 #alphaV is volume avg power.
+    alphaprime=(alphaT-2)/2
+    Ahat[ok]=Amplitude*rrr[ok]**alphaprime
+    print("Alpha prime",alphaprime)
+    #Ahat -= Ahat.min()-4
+    if rando:
+        rando=np.random.random(Ahat.size)
+        rando.shape=Ahat.shape
+        Ahat *= rando
+    Ahat[0,0,0] =100*Ahat.max()
+    #Ahat=np.ones([N,N,N])
+    if phase:
+        phi = (np.random.random(Ahat.size)-0.5)*np.pi*2
+        phi.shape = Ahat.shape
+        print('PHI',phi.min(),phi.max())
+        Ahatmag = np.abs(Ahat)
+        Ahat = Ahatmag*np.cos(phi)+Ahatmag*np.sin(phi)*1j
+        Ahat[0,0,0] = np.abs(Ahat[0,0,0])
+    H = Ahat.shape[0]//2
+    Atotal=Ahat
+    Ahat = Ahat[:,:,:H+1]
+    Q = np.fft.irfftn(Ahat)
+    return Q
+
+
+def plot_set(ftool,outname,axis=0):
+    fig,ax=plt.subplots(2,2)
+    ax0=ax[0][0];ax1=ax[0][1];ax2=ax[1][0];ax3=ax[1][1]
+    ax0.imshow(ftool.rho.sum(axis=axis),interpolation='nearest',origin='lower')
+    ax1.plot(ftool.ps2.kcen,ftool.ps2.power,c='r',label='p2d')
+    ax1.set(xscale='log',yscale='log')
+    fig.savefig(outname)
+
+
 
 def plot_power(arr,ax):
     a = np.roll(arr,arr.shape[0]//2,axis=0)
@@ -110,39 +159,40 @@ def plot_brunt(ftool,outname=None, fitrange=None, method=None, ax=None):
     ax.legend(loc=1)
     error = 1-ftool.ratio_1
     text_x=0.05
-    text_y=0.45
+    text_y=0.35
     dy=0.07
     dx = 0.3
-    ax.text(text_x,    text_y-0*dy,r"$%5.3f \sigma_{x3}$"%ftool.sigma_x3d, transform=ax.transAxes)
-    ax.text(text_x,    text_y-1*dy,r"$%5.3f \sigma_B $"%ftool.sigma_Brunt,  transform=ax.transAxes)
-    ax.text(text_x,    text_y-2*dy,r"$%5.3f  ratio $"%(ftool.ratio_1),  transform=ax.transAxes)
-    ax.text(text_x+dx, text_y-2*dy,r"$%5.3f  error $"%error,  transform=ax.transAxes)
-    ax.text(text_x,    text_y-3*dy,r"$%5.3f \sigma_{x2}$"%ftool.sigma_x2d, transform=ax.transAxes)
-    ax.text(text_x+dx, text_y-3*dy,r"$%5.3f \sigma_{2k}$"%ftool.sigma_k2d, transform=ax.transAxes)
-    ax.text(text_x,    text_y-4*dy,r"$%5.3f R $"%(1./ftool.Rinv), transform=ax.transAxes)
-    ax.text(text_x,    text_y-5*dy,r"$%5.3f \sigma_{k3}$"%ftool.sigma_k3d, transform=ax.transAxes)
-    ax.text(text_x,    text_y-6*dy,r"$%5.3f \sigma_{k2k}$"%ftool.sigma_k2dk, transform=ax.transAxes)
+    ax.text(text_x,    text_y-0*dy,r"$\sigma_{x3}\ %5.3f $ "%ftool.sigma_x3d, transform=ax.transAxes)
+    ax.text(text_x+dx, text_y-0*dy,r"$\sigma_B   \ %5.3f $ "%ftool.sigma_Brunt,  transform=ax.transAxes)
+    ax.text(text_x,    text_y-1*dy,r"$ratio      \ %5.3f $ "%(ftool.ratio_1),  transform=ax.transAxes)
+    ax.text(text_x+dx, text_y-1*dy,r"$error      \ %5.3f $ "%error,  transform=ax.transAxes)
+    ax.text(text_x,    text_y-2*dy,r"$\sigma_{k3}\ %5.3f $ "%ftool.sigma_k3d, transform=ax.transAxes)
+    ax.text(text_x+dx, text_y-2*dy,r"$\sigma_{k2k}\ %5.3f $ "%ftool.sigma_k2dk, transform=ax.transAxes)
+    ax.text(text_x,    text_y-3*dy,r"$\sigma_{x2}\ %5.3f $ "%ftool.sigma_x2d, transform=ax.transAxes)
+    ax.text(text_x+dx, text_y-3*dy,r"$\sigma_{k2}\ %5.3f $ "%ftool.sigma_k2d, transform=ax.transAxes)
+    ax.text(text_x,    text_y-4*dy,r"$R          \  %5.3f $ "%(1./ftool.Rinv), transform=ax.transAxes)
 
     if savefig:
         fig.savefig(outname)
 
 def sigmas_2donly(self):
-    #this works.  Not normalized, though.
-    self.sigma_x2d = np.sqrt(((self.rho2)**2).sum().real)
-    self.sigma_k2d = np.sqrt(self.ps2.power[1:].sum().real)
-    self.sigma_k2dk= np.sqrt(( self.ps2.kcen*self.ps2.power)[1:].sum())
-    self.Rinv = self.sigma_k2dk.real/self.sigma_k2d.real
-    self.sigma_Brunt = self.sigma_x2d.real*self.Rinv
-
-def sigmas_full(self):
-    #this works.  Probably.
-    self.sigma_x3d = np.sqrt((self.rho**2).sum().real)
-    self.sigma_k3d = np.sqrt((self.ps3.power).sum().real)
+    #good verson.
     self.sigma_x2d = np.sqrt(((self.rho2)**2).sum().real)
     self.sigma_k2d = np.sqrt(self.ps2.power.sum().real)
     self.sigma_k2dk= np.sqrt((2* self.ps2.kcen*self.ps2.power).sum())
     self.Rinv = self.sigma_k2dk.real/self.sigma_k2d.real
     self.sigma_Brunt = self.sigma_x2d.real*self.Rinv
+
+def sigmas_full(self):
+    #good version, don't touch it.
+    self.sigma_x2d = np.sqrt(((self.rho2)**2).sum().real)
+    self.sigma_k2d = np.sqrt(self.ps2.power.sum().real)
+    self.sigma_k2dk= np.sqrt((2* self.ps2.kcen*self.ps2.power).sum())
+    self.Rinv = self.sigma_k2dk.real/self.sigma_k2d.real
+    self.sigma_Brunt = self.sigma_x2d.real*self.Rinv
+
+    self.sigma_x3d = np.sqrt((self.rho**2).sum().real)
+    self.sigma_k3d = np.sqrt((self.ps3.power).sum().real)
     self.ratio_1 =self.sigma_Brunt/self.sigma_x3d
     #just to check that everything works right, do it with the actual 3d power spectrum.
     #R2 should be 1
