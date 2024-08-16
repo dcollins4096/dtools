@@ -5,9 +5,16 @@ import scipy.stats
 class powerspectrum():
     def __init__(self,arr):
         Nhat=np.fft.fftn(arr)
+        Nhat /= arr.size #dx^n for the fft
         rhohat = np.abs(Nhat)**2
-        rhohat /= rhohat.size
-        kx = np.fft.fftfreq(rhohat.shape[0])
+        nz = rhohat.shape[0]
+        kx = np.fft.fftfreq(nz)*nz
+        self.dk = kx[1]-kx[0]
+        self.dx = 1/arr.shape[0]
+        #self.dk = 1
+        #self.dx = 1
+        #print('1/dk',1/self.dk)
+        #print('1/dx',1/self.dx)
         kabs = np.sort(np.unique(np.abs(kx)))
         rank = len(arr.shape)
         if rank == 2:
@@ -22,7 +29,8 @@ class powerspectrum():
         self.rho=arr
         self.rhohat=rhohat
         self.k = k
-        self.power=power.real
+        self.da = self.dk**(rank)
+        self.power=power.real*self.da
         self.kcen=bc
         if rank == 2:
             volume = 2*np.pi*self.kcen

@@ -171,28 +171,37 @@ def plot_brunt(ftool,outname=None, fitrange=None, method=None, ax=None):
     ax.text(text_x,    text_y-3*dy,r"$\sigma_{x2}\ %5.3f $ "%ftool.sigma_x2d, transform=ax.transAxes)
     ax.text(text_x+dx, text_y-3*dy,r"$\sigma_{k2}\ %5.3f $ "%ftool.sigma_k2d, transform=ax.transAxes)
     ax.text(text_x,    text_y-4*dy,r"$R          \  %5.3f $ "%(1./ftool.Rinv), transform=ax.transAxes)
+    print("Sx3 %0.3f  SB %0.3f"%(ftool.sigma_x3d,ftool.sigma_Brunt))
+    print("rat %0.3f  er %0.3f"%(ftool.ratio_1,error))
+    print("Sk3 %0.3f  Sk2k %0.3f"%(ftool.sigma_k3d,ftool.sigma_k2dk))
+    print("Sx2 %0.3f  Sk2 %0.3f"%(ftool.sigma_x2d, ftool.sigma_k2d))
+
+
 
     if savefig:
         fig.savefig(outname)
 
 def sigmas_2donly(self):
-    #good verson.
-    self.sigma_x2d = np.sqrt(((self.rho2)**2).sum().real)
-    self.sigma_k2d = np.sqrt(self.ps2.power.sum().real)
-    self.sigma_k2dk= np.sqrt((2* self.ps2.kcen*self.ps2.power).sum())
+    dx = self.ps2.dx
+    da=dx**2
+    self.sigma_x2d = np.sqrt(((self.rho2)**2*da).sum().real)
+    self.sigma_k2d = np.sqrt((self.ps2.power*self.ps2.dk).sum().real) #kludge
+    self.sigma_k2dk= np.sqrt((2* self.ps2.kcen*self.ps2.power*self.ps2.dk**2).sum())
     self.Rinv = self.sigma_k2dk.real/self.sigma_k2d.real
     self.sigma_Brunt = self.sigma_x2d.real*self.Rinv
 
 def sigmas_full(self):
-    #good version, don't touch it.
-    self.sigma_x2d = np.sqrt(((self.rho2)**2).sum().real)
-    self.sigma_k2d = np.sqrt(self.ps2.power.sum().real)
-    self.sigma_k2dk= np.sqrt((2* self.ps2.kcen*self.ps2.power).sum())
+    dx = self.ps2.dx
+    dv=dx**3
+    da=dx**2
+    self.sigma_x2d = np.sqrt(((self.rho2)**2*da).sum().real)
+    self.sigma_k2d = np.sqrt((self.ps2.power*self.ps2.dk).sum().real) #kludge
+    self.sigma_k2dk= np.sqrt((2* self.ps2.kcen*self.ps2.power*self.ps2.dk**2).sum())
     self.Rinv = self.sigma_k2dk.real/self.sigma_k2d.real
     self.sigma_Brunt = self.sigma_x2d.real*self.Rinv
 
-    self.sigma_x3d = np.sqrt((self.rho**2).sum().real)
-    self.sigma_k3d = np.sqrt((self.ps3.power).sum().real)
+    self.sigma_x3d = np.sqrt((self.rho**2*dv).sum().real)
+    self.sigma_k3d = np.sqrt((self.ps3.power*self.ps3.dk).sum().real)
     self.ratio_1 =self.sigma_Brunt/self.sigma_x3d
     #just to check that everything works right, do it with the actual 3d power spectrum.
     #R2 should be 1
@@ -203,9 +212,9 @@ def sigmas_full(self):
 
 
 class fft_tool():
-    def __init__(self,rho):
+    def __init__(self,rho, rho2=None):
         self.rho=rho
-        self.rho2=None
+        self.rho2=rho2
         self.rho2p=None
         self.done2=False
         self.done3=False
@@ -220,8 +229,6 @@ class fft_tool():
             self.rho2=self.rho.sum(axis=projax)
         if apodize == 1:
             self.rho2 = apodize1(self.rho2)
-
-
 
         self.ps2 = ps.powerspectrum(self.rho2)
 
