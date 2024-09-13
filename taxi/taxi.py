@@ -397,6 +397,9 @@ class taxi:
             self.set_filename_preset_syntax(frame)
         elif self.name_syntax == 'outputlog':
             self.set_filename_from_outputlog(frame)
+        elif self.name_syntax == 'athena':
+            self.basename = "%s/parthenon.prim.%05d.phdf"%(self.directory,frame)
+            
         else:
             print("Error: Poorly defined name syntax.  set oober.name_syntax = 'preset'||'outputlog'")
             raise
@@ -410,9 +413,9 @@ class taxi:
         if frame == None:
             frame = self.return_frames()[-1]
         #take 1: no subdirectory (very old style)
-        self.basename_template = self.directory+'/'+self.name_files+'%04i'
-        self.basename = self.basename_template %(frame)
         if glob.glob(self.basename+".hierarchy") == []:
+            self.basename_template = self.directory+'/'+self.name_files+'%04i'
+            self.basename = self.basename_template %(frame)
             self.basename_template = self.directory + "/" + self.name_dir + '%04i/'\
                                      + self.name_files + "%04i"
             self.basename = self.basename_template %(frame,frame)
@@ -589,6 +592,8 @@ class taxi:
             if type( self.frames) is not list: #isinstance(self.frames, types.ListType)
                 print("With preset name syntax, frames must be a list of integers.")
                 raise
+            return self.frames
+        if self.name_syntax == 'athena':
             return self.frames
         all_frames=self.get_all_frames()
         #pdb.set_trace()
