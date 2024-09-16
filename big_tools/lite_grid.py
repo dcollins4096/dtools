@@ -38,16 +38,18 @@ class fake_hierarchy():
                 self.grids.append(this_grid)
                 this_grid=None
 
-def get_cube(this_h, TopGridDimensions, field):
+def get_cube(this_h, TopGridDimensions, field,extend=nar([0,0,0])):
 
-    output = np.zeros(TopGridDimensions)
+    output = np.zeros(TopGridDimensions+extend)
     for ng,ggg in enumerate(this_h.grids):
+        print('wtf')
         h5ptr = h5py.File('%s/%s'%(this_h.base,ggg.fname),'r')
         group = h5ptr['Grid%08d'%ggg.grid_id]
         dset = group[field][()].swapaxes(0,2)
         h5ptr.close()
         left =  (ggg.GridLeftEdge*TopGridDimensions).astype('int')
-        right = (ggg.GridRightEdge*TopGridDimensions).astype('int')
+        #right = (ggg.GridRightEdge*TopGridDimensions).astype('int')
+        right = left+dset.shape
         output[left[0]:right[0],left[1]:right[1],left[2]:right[2]]=dset
     return output
 
