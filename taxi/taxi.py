@@ -8,8 +8,6 @@ import yt
 array=np.array
 #import h5py
 import types, time,weakref
-import dtools.davetools as davetools
-from dtools.davetools import no_whites
 #import dave_callbacks
 from dtools.davetools import   ensure_list
 import dtools.davetools as dt
@@ -469,7 +467,7 @@ class taxi:
             for nframe,line in enumerate(lines):
                 if debug>0:
                     print(nframe, line[:-1])
-                linesplit = davetools.no_whites(line.split(" "))
+                linesplit = dt.no_whites(line.split(" "))
                 self.frame_dict[ nframe ] = {}
                 self.frame_dict[ nframe ]['dsname'] = linesplit[2]
                 self.frame_dict_string_length = max( self.frame_dict_string_length , len(linesplit[2]) )
